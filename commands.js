@@ -23,6 +23,22 @@ async function sendToCartellinoChannel(interaction, embed) {
   }
 }
 
+function parseMentions(mentionString) {
+  if (!mentionString) return [];
+  // Estrae gli user ID dalle mention Discord format: <@USERID> o <@!USERID>
+  const userIds = [];
+  const matches = mentionString.match(/<@!?(\d+)>/g);
+  if (matches) {
+    matches.forEach(match => {
+      const id = match.replace(/[<@!>]/g, '');
+      if (id && !userIds.includes(id)) {
+        userIds.push(id);
+      }
+    });
+  }
+  return userIds;
+}
+
 function calculateAge(dataNascitaStr) {
   // Parsa la data nel formato GG/MM/YYYY
   const [giorno, mese, anno] = dataNascitaStr.split('/').map(Number);
@@ -345,17 +361,15 @@ const commands = {
       .addStringOption(option => option.setName('oggetti_sequestrati').setDescription('Oggetti sequestrati').setRequired(true))
       .addStringOption(option => option.setName('oggetti_consegnati').setDescription('Oggetti consegnati').setRequired(true))
       .addAttachmentOption(option => option.setName('foto').setDescription('Foto arrestato').setRequired(true))
-      .addUserOption(option => option.setName('agenti').setDescription('Agenti coinvolti').setRequired(false)),
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false)),
     execute: async (interaction) => {
       const nome = interaction.options.getString('nome');
       const cognome = interaction.options.getString('cognome');
       const dataNascita = interaction.options.getString('data_nascita');
       
-      // Verifica che la persona esista nel database
+      // Registra la persona se non esiste nel database
+      db.addPersona(nome, cognome, dataNascita);
       let persona = db.getPersona(nome, cognome, dataNascita);
-      if (!persona) {
-        return interaction.reply({ content: `❌ Persona non trovata nel database! Prima fai \`/info ${nome} ${cognome} ${dataNascita}\` per registrarla.`, ephemeral: true });
-      }
       
       const reati = interaction.options.getString('reati');
       const multa = interaction.options.getNumber('multa');
@@ -364,8 +378,8 @@ const commands = {
       const fotoAttachment = interaction.options.getAttachment('foto');
       const foto = fotoAttachment.url;
       
-      const agentiOption = interaction.options.getUser('agenti');
-      const agentiMenzionati = agentiOption ? [agentiOption.id] : [interaction.user.id];
+      const agentiString = interaction.options.getString('agenti') || '';
+      const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
       const arrestId = db.addArresto(
         agentiMenzionati,
@@ -395,7 +409,8 @@ const commands = {
           { name: '🔒 Oggetti Sequestrati', value: `\`\`\`${oggettiSequestrati}\`\`\``, inline: false },
           { name: '📦 Oggetti Consegnati', value: `\`\`\`${oggettiConsegnati}\`\`\``, inline: false },
           { name: '\u200b', value: '\u200b' },
-          { name: '👮 Registrato da', value: `\`${interaction.user.username}\``, inline: true },
+          { name: '👮 Agenti Coinvolti', value: agentiMenzionati.map((id, i) => `${i + 1}. <@${id}>`).join('\n'), inline: false },
+          { name: '👤 Registrato da', value: `\`${interaction.user.username}\``, inline: true },
           { name: '⏰ Ora', value: `\`${new Date().toLocaleTimeString('it-IT')}\``, inline: true }
         ])
         .setFooter({ text: 'LSPD Database System' })
@@ -449,36 +464,37 @@ const commands = {
       .addStringOption(option => option.setName('data_nascita').setDescription('Data di nascita (GG/MM/YYYY)').setRequired(true))
       .addStringOption(option => option.setName('motivo').setDescription('Motivo del rilascio').setRequired(true))
       .addStringOption(option => option.setName('data_scadenza').setDescription('Data scadenza (GG/MM/YYYY)').setRequired(true))
-      .addAttachmentOption(option => option.setName('foto').setDescription('Foto').setRequired(true)),
+      .addAttachmentOption(option => option.setName('foto').setDescription('Foto').setRequired(true))
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false)),
     execute: async (interaction) => {
       const nome = interaction.options.getString('nome');
       const cognome = interaction.options.getString('cognome');
       const dataNascita = interaction.options.getString('data_nascita');
       
-      // Verifica che la persona esista nel database
+      // Registra la persona se non esiste nel database
+      db.addPersona(nome, cognome, dataNascita);
       let persona = db.getPersona(nome, cognome, dataNascita);
-      if (!persona) {
-        return interaction.reply({ content: `❌ Persona non trovata nel database! Prima fai \`/info ${nome} ${cognome} ${dataNascita}\` per registrarla.`, ephemeral: true });
-      }
       
       const motivo = interaction.options.getString('motivo');
       const dataScadenza = interaction.options.getString('data_scadenza');
       const fotoAttachment = interaction.options.getAttachment('foto');
       const foto = fotoAttachment.url;
+      const agentiString = interaction.options.getString('agenti') || '';
+      const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
-      const pdaId = db.addPda(interaction.user.id, nome, cognome, dataNascita, motivo, dataScadenza);
+      const pdaId = db.addPda(agentiMenzionati, nome, cognome, dataNascita, motivo, dataScadenza);
       
       const embed = new EmbedBuilder()
         .setColor(0x00ff00)
         .setTitle(`🔫 PDA RILASCIATO`)
-        .setThumbnail(foto)
+        .setImage(foto)
         .setFields([
           { name: '🆔 ID PDA', value: `\`${pdaId}\``, inline: true },
           { name: 'Persona', value: `${nome} ${cognome}`, inline: true },
           { name: 'Data Nascita', value: `\`${dataNascita}\``, inline: true },
           { name: 'Motivo', value: motivo, inline: false },
           { name: 'Scadenza', value: `\`${dataScadenza}\``, inline: true },
-          { name: 'Rilasciato da', value: `\`${interaction.user.username}\``, inline: true }
+          { name: '👮 Agenti Coinvolti', value: agentiMenzionati.map((id, i) => `${i + 1}. <@${id}>`).join('\n'), inline: false }
         ])
         .setTimestamp();
       
@@ -575,11 +591,9 @@ const commands = {
       const cognome = interaction.options.getString('cognome');
       const dataNascita = interaction.options.getString('data_nascita');
       
-      // Verifica che la persona esista nel database
+      // Registra la persona se non esiste nel database
+      db.addPersona(nome, cognome, dataNascita);
       let persona = db.getPersona(nome, cognome, dataNascita);
-      if (!persona) {
-        return interaction.reply({ content: `❌ Persona non trovata nel database! Prima fai \`/info ${nome} ${cognome} ${dataNascita}\` per registrarla.`, ephemeral: true });
-      }
       
       const data = interaction.options.getString('data');
       const reati = interaction.options.getString('reati');
@@ -653,23 +667,22 @@ const commands = {
       .addStringOption(option => option.setName('data_nascita').setDescription('Data di nascita (GG/MM/YYYY)').setRequired(true))
       .addStringOption(option => option.setName('data').setDescription('Data multa (GG/MM/YYYY)').setRequired(true))
       .addStringOption(option => option.setName('reato').setDescription('Motivo della multa').setRequired(true))
-      .addUserOption(option => option.setName('agente').setDescription('Agente che ha fatto la multa').setRequired(false)),
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false)),
     execute: async (interaction) => {
       const nome = interaction.options.getString('nome');
       const cognome = interaction.options.getString('cognome');
       const dataNascita = interaction.options.getString('data_nascita');
       
-      // Verifica che la persona esista nel database
+      // Registra la persona se non esiste nel database
+      db.addPersona(nome, cognome, dataNascita);
       let persona = db.getPersona(nome, cognome, dataNascita);
-      if (!persona) {
-        return interaction.reply({ content: `❌ Persona non trovata nel database! Prima fai \`/info ${nome} ${cognome} ${dataNascita}\` per registrarla.`, ephemeral: true });
-      }
       
       const data = interaction.options.getString('data');
       const reato = interaction.options.getString('reato');
-      const agente = interaction.options.getUser('agente') || interaction.user;
+      const agentiString = interaction.options.getString('agenti') || '';
+      const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
-      const multaId = db.addMulta(agente.id, nome, cognome, dataNascita, data, reato);
+      const multaId = db.addMulta(agentiMenzionati, nome, cognome, dataNascita, data, reato);
       
       const embed = new EmbedBuilder()
         .setColor(0xffcc00)
@@ -680,7 +693,7 @@ const commands = {
           { name: 'Data Nascita', value: `\`${dataNascita}\``, inline: true },
           { name: 'Data', value: `\`${data}\``, inline: true },
           { name: 'Motivo', value: `\`\`\`${reato}\`\`\``, inline: false },
-          { name: 'Agente', value: `\`${agente.username}\``, inline: true }
+          { name: 'Agenti', value: agentiMenzionati.map((id, i) => `${i + 1}. <@${id}>`).join('\n'), inline: false }
         ])
         .setTimestamp();
       
@@ -726,17 +739,15 @@ const commands = {
       .addStringOption(option => option.setName('motivo').setDescription('Motivo sequestro').setRequired(true))
       .addNumberOption(option => option.setName('multa').setDescription('Importo multa').setRequired(true))
       .addAttachmentOption(option => option.setName('foto').setDescription('Foto').setRequired(true))
-      .addUserOption(option => option.setName('agenti').setDescription('Agenti coinvolti').setRequired(false)),
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false)),
     execute: async (interaction) => {
       const nome = interaction.options.getString('nome');
       const cognome = interaction.options.getString('cognome');
       const dataNascita = interaction.options.getString('data_nascita');
       
-      // Verifica che la persona esista nel database
+      // Registra la persona se non esiste nel database
+      db.addPersona(nome, cognome, dataNascita);
       let persona = db.getPersona(nome, cognome, dataNascita);
-      if (!persona) {
-        return interaction.reply({ content: `❌ Persona non trovata nel database! Prima fai \`/info ${nome} ${cognome} ${dataNascita}\` per registrarla.`, ephemeral: true });
-      }
       
       const data = interaction.options.getString('data');
       const targa = interaction.options.getString('targa');
@@ -744,15 +755,15 @@ const commands = {
       const multa = interaction.options.getNumber('multa');
       const fotoAttachment = interaction.options.getAttachment('foto');
       const foto = fotoAttachment.url;
-      const agentiOption = interaction.options.getUser('agenti');
-      const agentiMenzionati = agentiOption ? [agentiOption.id] : [interaction.user.id];
+      const agentiString = interaction.options.getString('agenti') || '';
+      const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
       const sequestroId = db.addSequestro(agentiMenzionati, nome, cognome, dataNascita, data, targa, motivo, multa);
       
       const embed = new EmbedBuilder()
         .setColor(0x0066ff)
         .setTitle(`🚗 MACCHINA SEQUESTRATA`)
-        .setThumbnail(foto)
+        .setImage(foto)
         .setFields([
           { name: '🆔 ID Sequestro', value: `\`${sequestroId}\``, inline: true },
           { name: 'Proprietario', value: `${nome} ${cognome}`, inline: true },
@@ -760,7 +771,8 @@ const commands = {
           { name: 'Targa', value: `\`${targa}\``, inline: true },
           { name: 'Data', value: `\`${data}\``, inline: true },
           { name: 'Motivo', value: `\`\`\`${motivo}\`\`\``, inline: false },
-          { name: 'Multa', value: `\`€${multa.toFixed(2)}\``, inline: true }
+          { name: 'Multa', value: `\`€${multa.toFixed(2)}\``, inline: true },
+          { name: '👮 Agenti Coinvolti', value: agentiMenzionati.map((id, i) => `${i + 1}. <@${id}>`).join('\n'), inline: false }
         ])
         .setTimestamp();
       

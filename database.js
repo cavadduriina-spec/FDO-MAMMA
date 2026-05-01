@@ -138,7 +138,7 @@ function getArresto(arrestId) {
   return db.arresti[arrestId] || null;
 }
 
-function addPda(agenteId, nome, cognome, dataNascita, motivo, dataScadenza) {
+function addPda(agentiIds, nome, cognome, dataNascita, motivo, dataScadenza) {
   const db = loadDatabase();
   const pdaId = db.nextPdaId++;
   const personaId = addPersona(nome, cognome, dataNascita);
@@ -150,7 +150,7 @@ function addPda(agenteId, nome, cognome, dataNascita, motivo, dataScadenza) {
   
   db.pda[pdaId] = {
     id: pdaId,
-    agente: agenteId,
+    agenti: Array.isArray(agentiIds) ? agentiIds : [agentiIds],
     nome,
     cognome,
     dataNascita,
@@ -162,9 +162,12 @@ function addPda(agenteId, nome, cognome, dataNascita, motivo, dataScadenza) {
   
   db.persone[personaId].pda = pdaId;
   
-  if (db.agenti[agenteId]) {
-    db.agenti[agenteId].pdaEmessi++;
-  }
+  // Aggiorna contatori per tutti gli agenti
+  (Array.isArray(agentiIds) ? agentiIds : [agentiIds]).forEach(agenteId => {
+    if (db.agenti[agenteId]) {
+      db.agenti[agenteId].pdaEmessi++;
+    }
+  });
   
   saveDatabase(db);
   return pdaId;
@@ -234,14 +237,14 @@ function getDenuncia(denunciaId) {
   return db.denuncie[denunciaId] || null;
 }
 
-function addMulta(agenteId, nome, cognome, dataNascita, data, reato) {
+function addMulta(agentiIds, nome, cognome, dataNascita, data, reato) {
   const db = loadDatabase();
   const multaId = db.nextMultaId++;
   const personaId = addPersona(nome, cognome, dataNascita);
   
   db.multe[multaId] = {
     id: multaId,
-    agente: agenteId,
+    agenti: Array.isArray(agentiIds) ? agentiIds : [agentiIds],
     nome,
     cognome,
     dataNascita,
@@ -252,13 +255,16 @@ function addMulta(agenteId, nome, cognome, dataNascita, data, reato) {
   
   db.persone[personaId].multe.push(multaId);
   
-  if (db.agenti[agenteId]) {
-    db.agenti[agenteId].multe++;
-  }
+  // Aggiorna contatori per tutti gli agenti
+  (Array.isArray(agentiIds) ? agentiIds : [agentiIds]).forEach(agenteId => {
+    if (db.agenti[agenteId]) {
+      db.agenti[agenteId].multe++;
+    }
+  });
   
   saveDatabase(db);
   return multaId;
-}
+}}
 
 function editMulta(multaId, data) {
   const db = loadDatabase();
