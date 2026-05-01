@@ -83,7 +83,21 @@ client.on('interactionCreate', async (interaction) => {
         timbraInizio: new Date().toISOString()
       });
       
-      await interaction.reply({ content: `✅ Timbratura entrata registrata alle ${new Date().toLocaleTimeString('it-IT')}`, ephemeral: true });
+      // Ottieni gli agenti in servizio
+      const tuttiAgenti = db.getAllAgenti();
+      const agentiInServizio = Object.entries(tuttiAgenti)
+        .filter(([id, agente]) => agente.inServizio)
+        .map(([id]) => `<@${id}>`);
+      
+      let risposta = `✅ Timbratura entrata registrata alle ${new Date().toLocaleTimeString('it-IT')}\n\n`;
+      
+      if (agentiInServizio.length > 0) {
+        risposta += `👮 **Agenti in servizio:** ${agentiInServizio.join(' • ')}`;
+      } else {
+        risposta += `⚠️ Nessun altro agente in servizio al momento`;
+      }
+      
+      await interaction.reply({ content: risposta, ephemeral: true });
     }
     
     if (action === 'stimbra') {
@@ -162,7 +176,22 @@ client.on('interactionCreate', async (interaction) => {
       }
       
       const status = agente.inServizio ? '🟢 **IN SERVIZIO**' : '⚫ **FUORI SERVIZIO**';
-      await interaction.reply({ content: status, ephemeral: true });
+      
+      // Ottieni tutti gli agenti in servizio
+      const tuttiAgenti = db.getAllAgenti();
+      const agentiInServizio = Object.entries(tuttiAgenti)
+        .filter(([id, agent]) => agent.inServizio)
+        .map(([id]) => `<@${id}>`);
+      
+      let risposta = `${status}\n\n`;
+      
+      if (agentiInServizio.length > 0) {
+        risposta += `👮 **Agenti in servizio:** ${agentiInServizio.join(' • ')}`;
+      } else {
+        risposta += `⚠️ Nessun agente in servizio al momento`;
+      }
+      
+      await interaction.reply({ content: risposta, ephemeral: true });
     }
   }
 });
