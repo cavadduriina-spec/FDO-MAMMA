@@ -381,6 +381,19 @@ const commands = {
       const agentiString = interaction.options.getString('agenti') || '';
       const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
+      // Assicurati che tutti gli agenti siano nel database
+      for (const agenteId of agentiMenzionati) {
+        let agenteData = db.getAgente(agenteId);
+        if (!agenteData) {
+          try {
+            const user = await interaction.client.users.fetch(agenteId);
+            db.addAgente(agenteId, user.username);
+          } catch (error) {
+            console.error('Errore nel fetch dell\'utente:', error);
+          }
+        }
+      }
+      
       const arrestId = db.addArresto(
         agentiMenzionati,
         nome,
@@ -480,6 +493,19 @@ const commands = {
       const foto = fotoAttachment.url;
       const agentiString = interaction.options.getString('agenti') || '';
       const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
+      
+      // Assicurati che tutti gli agenti siano nel database
+      for (const agenteId of agentiMenzionati) {
+        let agenteData = db.getAgente(agenteId);
+        if (!agenteData) {
+          try {
+            const user = await interaction.client.users.fetch(agenteId);
+            db.addAgente(agenteId, user.username);
+          } catch (error) {
+            console.error('Errore nel fetch dell\'utente:', error);
+          }
+        }
+      }
       
       const pdaId = db.addPda(agentiMenzionati, nome, cognome, dataNascita, motivo, dataScadenza);
       
@@ -680,6 +706,19 @@ const commands = {
       const agentiString = interaction.options.getString('agenti') || '';
       const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
       
+      // Assicurati che tutti gli agenti siano nel database
+      for (const agenteId of agentiMenzionati) {
+        let agenteData = db.getAgente(agenteId);
+        if (!agenteData) {
+          try {
+            const user = await interaction.client.users.fetch(agenteId);
+            db.addAgente(agenteId, user.username);
+          } catch (error) {
+            console.error('Errore nel fetch dell\'utente:', error);
+          }
+        }
+      }
+      
       const multaId = db.addMulta(agentiMenzionati, nome, cognome, dataNascita, data, reato);
       
       const embed = new EmbedBuilder()
@@ -754,6 +793,19 @@ const commands = {
       const foto = fotoAttachment.url;
       const agentiString = interaction.options.getString('agenti') || '';
       const agentiMenzionati = parseMentions(agentiString).length > 0 ? parseMentions(agentiString) : [interaction.user.id];
+      
+      // Assicurati che tutti gli agenti siano nel database
+      for (const agenteId of agentiMenzionati) {
+        let agenteData = db.getAgente(agenteId);
+        if (!agenteData) {
+          try {
+            const user = await interaction.client.users.fetch(agenteId);
+            db.addAgente(agenteId, user.username);
+          } catch (error) {
+            console.error('Errore nel fetch dell\'utente:', error);
+          }
+        }
+      }
       
       const sequestroId = db.addSequestro(agentiMenzionati, nome, cognome, dataNascita, data, targa, motivo, multa);
       
