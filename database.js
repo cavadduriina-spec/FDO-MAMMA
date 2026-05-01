@@ -264,7 +264,7 @@ function addMulta(agentiIds, nome, cognome, dataNascita, data, reato) {
   
   saveDatabase(db);
   return multaId;
-}}
+}
 
 function editMulta(multaId, data) {
   const db = loadDatabase();
