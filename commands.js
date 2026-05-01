@@ -416,7 +416,6 @@ const commands = {
         .setFooter({ text: 'LSPD Database System' })
         .setTimestamp();
       
-      await sendToCartellinoChannel(interaction, embed);
       await interaction.reply({ embeds: [embed] });
     }
   },
@@ -621,7 +620,6 @@ const commands = {
         ])
         .setTimestamp();
       
-      await sendToCartellinoChannel(interaction, embed);
       await interaction.reply({ embeds: [embed] });
     }
   },
@@ -697,7 +695,6 @@ const commands = {
         ])
         .setTimestamp();
       
-      await sendToCartellinoChannel(interaction, embed);
       await interaction.reply({ embeds: [embed] });
     }
   },
