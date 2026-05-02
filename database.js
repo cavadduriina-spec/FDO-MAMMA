@@ -133,6 +133,32 @@ function editArresto(arrestId, data) {
   }
 }
 
+function removeArresto(arrestId) {
+  const db = loadDatabase();
+  const arresto = db.arresti[arrestId];
+  if (!arresto) return { success: false };
+
+  const personaId = `${arresto.nome.trim()}-${arresto.cognome.trim()}-${arresto.dataNascita.trim()}`.toLowerCase();
+  if (db.persone[personaId]) {
+    db.persone[personaId].arresti = db.persone[personaId].arresti.filter(id => id !== arrestId);
+    if (db.persone[personaId].arresti.length === 0 && db.persone[personaId].denuncie.length === 0 && db.persone[personaId].multe.length === 0) {
+      db.persone[personaId].fedina = 'pulita';
+    }
+  }
+
+  if (Array.isArray(arresto.agenti)) {
+    arresto.agenti.forEach(agenteId => {
+      if (db.agenti[agenteId] && db.agenti[agenteId].arresti > 0) {
+        db.agenti[agenteId].arresti -= 1;
+      }
+    });
+  }
+
+  delete db.arresti[arrestId];
+  saveDatabase(db);
+  return { success: true, arresto, persona: db.persone[personaId] || null };
+}
+
 function getArresto(arrestId) {
   const db = loadDatabase();
   return db.arresti[arrestId] || null;
@@ -200,7 +226,7 @@ function removePda(nome, cognome, dataNascita, motivo) {
   return { success: false };
 }
 
-function addDenuncia(nome, cognome, dataNascita, data, reati, chiEspone, proveReato, fotoUrl, linkProve) {
+function addDenuncia(nome, cognome, dataNascita, data, reati, chiEspone, proveReato, fotoUrl, linkProve, createdBy) {
   const db = loadDatabase();
   const denunciaId = db.nextDenunciaId++;
   const personaId = addPersona(nome, cognome, dataNascita);
@@ -216,6 +242,7 @@ function addDenuncia(nome, cognome, dataNascita, data, reati, chiEspone, proveRe
     proveReato,
     foto: fotoUrl || null,
     link: linkProve || null,
+    createdBy: createdBy || null,
     createdAt: new Date().toISOString()
   };
   
@@ -365,6 +392,7 @@ module.exports = {
   getPersona,
   addArresto,
   editArresto,
+  removeArresto,
   getArresto,
   addPda,
   editPda,

@@ -142,6 +142,14 @@ function createInfoPersonaEmbed(persona) {
   return embed;
 }
 
+function canModifyRecord(interaction, record) {
+  if (!record) return false;
+  if (hasRole(interaction.member, STAFF_ROLE)) return true;
+  if (Array.isArray(record.agenti) && record.agenti.includes(interaction.user.id)) return true;
+  if (record.createdBy && record.createdBy === interaction.user.id) return true;
+  return false;
+}
+
 const commands = {
   timbratura: {
     data: new SlashCommandBuilder()
@@ -192,7 +200,7 @@ const commands = {
             .setStyle(ButtonStyle.Secondary)
             .setEmoji('📊'),
           new ButtonBuilder()
-            .setCustomId(`info_bottone_${agenteId}`)
+            .setCustomId(`info_${agenteId}`)
             .setLabel('Info')
             .setStyle(ButtonStyle.Primary)
             .setEmoji('📋')
@@ -442,6 +450,7 @@ const commands = {
       .addNumberOption(option => option.setName('multa').setDescription('Multa').setRequired(false))
       .addStringOption(option => option.setName('oggetti_sequestrati').setDescription('Oggetti sequestrati').setRequired(false))
       .addStringOption(option => option.setName('oggetti_consegnati').setDescription('Oggetti consegnati').setRequired(false))
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false))
       .addAttachmentOption(option => option.setName('foto').setDescription('Foto arrestato').setRequired(false)),
     execute: async (interaction) => {
       const id = interaction.options.getInteger('id');
@@ -451,11 +460,20 @@ const commands = {
         return interaction.reply({ content: '❌ Arresto non trovato!', ephemeral: true });
       }
       
+      if (!canModifyRecord(interaction, arresto)) {
+        return interaction.reply({ content: '❌ Solo chi ha effettuato l\'arresto o lo staff può modificarlo!', ephemeral: true });
+      }
+      
       const updates = {};
       if (interaction.options.getString('reati')) updates.reati = interaction.options.getString('reati');
       if (interaction.options.getNumber('multa') !== null) updates.multa = interaction.options.getNumber('multa');
       if (interaction.options.getString('oggetti_sequestrati')) updates.oggettiSequestrati = interaction.options.getString('oggetti_sequestrati');
       if (interaction.options.getString('oggetti_consegnati')) updates.oggettiConsegnati = interaction.options.getString('oggetti_consegnati');
+      if (interaction.options.getString('agenti')) {
+        const agentiString = interaction.options.getString('agenti') || '';
+        const parsedAgenti = parseMentions(agentiString);
+        if (parsedAgenti.length > 0) updates.agenti = parsedAgenti;
+      }
       if (interaction.options.getAttachment('foto')) {
         const fotoAttachment = interaction.options.getAttachment('foto');
         updates.foto = fotoAttachment.url;
@@ -527,6 +545,45 @@ const commands = {
     }
   },
 
+  annulla_arresto: {
+    data: new SlashCommandBuilder()
+      .setName('annulla_arresto')
+      .setDescription('Annulla un arresto registrato')
+      .addIntegerOption(option => option.setName('id').setDescription('ID dell\'arresto').setRequired(true)),
+    execute: async (interaction) => {
+      const id = interaction.options.getInteger('id');
+      const arresto = db.getArresto(id);
+
+      if (!arresto) {
+        return interaction.reply({ content: '❌ Arresto non trovato!', ephemeral: true });
+      }
+
+      if (!canModifyRecord(interaction, arresto)) {
+        return interaction.reply({ content: '❌ Solo chi ha effettuato l\'arresto o lo staff può annullarlo!', ephemeral: true });
+      }
+
+      const result = db.removeArresto(id);
+      if (!result.success) {
+        return interaction.reply({ content: '❌ Errore durante l\'annullamento dell\'arresto!', ephemeral: true });
+      }
+
+      const persona = result.persona;
+      const embed = new EmbedBuilder()
+        .setColor(0xff6600)
+        .setTitle('🚫 ARRESTO ANNULLATO')
+        .setFields([
+          { name: '🆔 ID Arresto', value: `\`${id}\``, inline: true },
+          { name: 'Persona', value: `${arresto.nome} ${arresto.cognome}`, inline: true },
+          { name: 'Data Nascita', value: `\`${arresto.dataNascita}\``, inline: true },
+          { name: 'Annullato da', value: `\`${interaction.user.username}\``, inline: true },
+          { name: 'Fedina', value: `\`${persona?.fedina === 'pulita' ? 'PULITA' : 'SPORCA'}\``, inline: true }
+        ])
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+    }
+  },
+
   edit_pda: {
     data: new SlashCommandBuilder()
       .setName('edit_pda')
@@ -534,6 +591,7 @@ const commands = {
       .addIntegerOption(option => option.setName('id').setDescription('ID del PDA').setRequired(true))
       .addStringOption(option => option.setName('motivo').setDescription('Motivo').setRequired(false))
       .addStringOption(option => option.setName('data_scadenza').setDescription('Data scadenza').setRequired(false))
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false))
       .addAttachmentOption(option => option.setName('foto').setDescription('Foto').setRequired(false)),
     execute: async (interaction) => {
       const id = interaction.options.getInteger('id');
@@ -543,9 +601,18 @@ const commands = {
         return interaction.reply({ content: '❌ PDA non trovato!', ephemeral: true });
       }
       
+      if (!canModifyRecord(interaction, pda)) {
+        return interaction.reply({ content: '❌ Solo chi ha rilasciato il PDA o lo staff può modificarlo!', ephemeral: true });
+      }
+      
       const updates = {};
       if (interaction.options.getString('motivo')) updates.motivo = interaction.options.getString('motivo');
       if (interaction.options.getString('data_scadenza')) updates.dataScadenza = interaction.options.getString('data_scadenza');
+      if (interaction.options.getString('agenti')) {
+        const agentiString = interaction.options.getString('agenti') || '';
+        const parsedAgenti = parseMentions(agentiString);
+        if (parsedAgenti.length > 0) updates.agenti = parsedAgenti;
+      }
       if (interaction.options.getAttachment('foto')) {
         const fotoAttachment = interaction.options.getAttachment('foto');
         updates.foto = fotoAttachment.url;
@@ -628,7 +695,7 @@ const commands = {
       const fotoUrl = fotoAttachment ? fotoAttachment.url : null;
       const linkProve = interaction.options.getString('link_prove');
       
-      const denunciaId = db.addDenuncia(nome, cognome, dataNascita, data, reati, chiEspone, proveReato, fotoUrl, linkProve);
+      const denunciaId = db.addDenuncia(nome, cognome, dataNascita, data, reati, chiEspone, proveReato, fotoUrl, linkProve, interaction.user.id);
       
       const embed = new EmbedBuilder()
         .setColor(0xff9900)
@@ -665,6 +732,10 @@ const commands = {
       
       if (!denuncia) {
         return interaction.reply({ content: '❌ Denuncia non trovata!', ephemeral: true });
+      }
+      
+      if (!canModifyRecord(interaction, denuncia)) {
+        return interaction.reply({ content: '❌ Solo chi ha registrato la denuncia o lo staff può modificarla!', ephemeral: true });
       }
       
       const updates = {};
@@ -744,7 +815,8 @@ const commands = {
       .setDescription('Modifica una multa')
       .addIntegerOption(option => option.setName('id').setDescription('ID della multa').setRequired(true))
       .addStringOption(option => option.setName('reato').setDescription('Motivo multa').setRequired(false))
-      .addStringOption(option => option.setName('data').setDescription('Data multa').setRequired(false)),
+      .addStringOption(option => option.setName('data').setDescription('Data multa').setRequired(false))
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false)),
     execute: async (interaction) => {
       const id = interaction.options.getInteger('id');
       const multa = db.getMulta(id);
@@ -753,9 +825,18 @@ const commands = {
         return interaction.reply({ content: '❌ Multa non trovata!', ephemeral: true });
       }
       
+      if (!canModifyRecord(interaction, multa)) {
+        return interaction.reply({ content: '❌ Solo chi ha emesso la multa o lo staff può modificarla!', ephemeral: true });
+      }
+      
       const updates = {};
       if (interaction.options.getString('reato')) updates.reato = interaction.options.getString('reato');
       if (interaction.options.getString('data')) updates.data = interaction.options.getString('data');
+      if (interaction.options.getString('agenti')) {
+        const agentiString = interaction.options.getString('agenti') || '';
+        const parsedAgenti = parseMentions(agentiString);
+        if (parsedAgenti.length > 0) updates.agenti = parsedAgenti;
+      }
       
       db.editMulta(id, updates);
       
@@ -873,6 +954,7 @@ const commands = {
       .addStringOption(option => option.setName('motivo').setDescription('Motivo').setRequired(false))
       .addNumberOption(option => option.setName('multa').setDescription('Multa').setRequired(false))
       .addStringOption(option => option.setName('targa').setDescription('Targa veicolo').setRequired(false))
+      .addStringOption(option => option.setName('agenti').setDescription('Colleghi coinvolti (tagga: @agente1 @agente2)').setRequired(false))
       .addAttachmentOption(option => option.setName('foto').setDescription('Foto').setRequired(false)),
     execute: async (interaction) => {
       const id = interaction.options.getInteger('id');
@@ -882,10 +964,19 @@ const commands = {
         return interaction.reply({ content: '❌ Sequestro non trovato!', ephemeral: true });
       }
       
+      if (!canModifyRecord(interaction, sequestro)) {
+        return interaction.reply({ content: '❌ Solo chi ha effettuato il sequestro o lo staff può modificarlo!', ephemeral: true });
+      }
+      
       const updates = {};
       if (interaction.options.getString('motivo')) updates.motivo = interaction.options.getString('motivo');
       if (interaction.options.getNumber('multa') !== null) updates.multa = interaction.options.getNumber('multa');
       if (interaction.options.getString('targa')) updates.targa = interaction.options.getString('targa');
+      if (interaction.options.getString('agenti')) {
+        const agentiString = interaction.options.getString('agenti') || '';
+        const parsedAgenti = parseMentions(agentiString);
+        if (parsedAgenti.length > 0) updates.agenti = parsedAgenti;
+      }
       if (interaction.options.getAttachment('foto')) {
         const fotoAttachment = interaction.options.getAttachment('foto');
         updates.foto = fotoAttachment.url;

@@ -24,6 +24,11 @@ const CARTELLINO_CHANNEL_ID = process.env.CARTELLINO_CHANNEL_ID;
 const STAFF_ROLE = process.env.STAFF_ROLE || 'Staff LSPD';
 const PULISCI_FEDINA_ROLE = process.env.PULISCI_FEDINA_ROLE || 'Comandante';
 
+function hasRole(member, roleName) {
+  if (!member) return false;
+  return member.roles.cache.some(role => role.name === roleName || role.id === roleName);
+}
+
 client.on('ready', async () => {
   console.log(`✅ Bot online come ${client.user.tag}`);
   
@@ -68,10 +73,12 @@ client.on('interactionCreate', async (interaction) => {
   }
   
   if (interaction.isButton()) {
-    const [action, userId] = interaction.customId.split('_');
+    const parts = interaction.customId.split('_');
+    const action = parts[0];
+    const userId = parts.slice(1).join('_');
     
     if (action === 'timbra') {
-      if (interaction.user.id !== userId && !interaction.member?.roles.cache.has(STAFF_ROLE)) {
+      if (interaction.user.id !== userId && !hasRole(interaction.member, STAFF_ROLE)) {
         return interaction.reply({ content: '❌ Non puoi usare i bottoni di altri agenti!', ephemeral: true });
       }
       
@@ -101,7 +108,7 @@ client.on('interactionCreate', async (interaction) => {
     }
     
     if (action === 'stimbra') {
-      if (interaction.user.id !== userId && !interaction.member?.roles.cache.has(STAFF_ROLE)) {
+      if (interaction.user.id !== userId && !hasRole(interaction.member, STAFF_ROLE)) {
         return interaction.reply({ content: '❌ Non puoi usare i bottoni di altri agenti!', ephemeral: true });
       }
       
@@ -146,7 +153,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }
     
-    if (action === 'info_bottone') {
+    if (action === 'info') {
       const agente = db.getAgente(userId);
       if (!agente) {
         return interaction.reply({ content: '⚠️ Nessun dato trovato!', ephemeral: true });
